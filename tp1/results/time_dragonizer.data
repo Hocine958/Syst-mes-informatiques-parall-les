@@ -1,0 +1,6 @@
+draw,serial,26,1,0.23,4.05,4.36
+draw,serial,26,1,0.23,4.04,4.36
+draw,serial,26,1,0.23,4.06,4.37
+limits,serial,26,1,0.00,1.66,1.67
+limits,serial,26,1,0.00,1.67,1.67
+limits,serial,26,1,0.00,1.67,1.67
