@@ -72,6 +72,11 @@ int dragon_draw_pthread(char **canvas, struct rgb *image, int width, int height,
 		goto err;
 
 	/* 1. Initialiser barrier. */
+	s = pthread_barrier_init(&barrier, NULL, nb_thread);
+    if (s != 0){
+		printf("draw pthread_barrier_init error : " + s + '\n');
+		goto err;
+	}
 
 	if (dragon_limits_pthread(&lim, size, nb_thread) < 0)
 		goto err;
@@ -108,18 +113,33 @@ int dragon_draw_pthread(char **canvas, struct rgb *image, int width, int height,
 	info.limits = lim;
 	info.barrier = &barrier;
 	info.palette = palette;
-
+    
 	/* 2. Lancement du calcul parallèle principal avec dragon_draw_worker */
-
+	for (int i = 0; i < nb_thread; i++) {
+		if(pthread_create(&threads[i], NULL, dragon_draw_worker, &info[i]) != 0) {
+			printf("draw pthread_create error\n");
+			goto err;	
+		}
+	}
+	
 	/* 3. Attendre la fin du traitement */
-
+	int s = pthread_barrier_wait(&barrier);
+	if(s != 0){
+		printf("draw pthread_barrier_wait error : " + s + '\n');
+		goto err;
+	}
+	
 	/* 4. Destruction des variables. */
-
+	int s = pthread_barrier_destroy(&barrier);
+	if(s != 0){
+		printf("draw pthread_barrier_destroy error : " + s + '\n');
+		goto err;
+	}
 done:
 	FREE(data);
 	FREE(threads);
 	free_palette(palette);
-	// *canvas = dragon;
+	//*canvas = dragon;
 	*canvas = NULL; // TODO: retourner le dragon calculé
 	return ret;
 
