@@ -149,7 +149,7 @@ void *dragon_limit_worker(void *data)
  */
 int dragon_limits_pthread(limits_t *limits, uint64_t size, int nb_thread)
 {
-	TODO("dragon_limits_pthread");
+	//TODO("dragon_limits_pthread");
 
 	int ret = 0;
 	int i;
@@ -165,31 +165,53 @@ int dragon_limits_pthread(limits_t *limits, uint64_t size, int nb_thread)
 		piece_init(&masters[i]);
 		masters[i].orientation = tiles_orientation[i];
 	}
-
-	pthread_t threads[nb_thread];
-	arg_t args[nb_thread];
-	
-	for (int i = 0; i < nb_thread; i++) {
-        pthread_attr_t attr;
-        //size_t ss = (1 << 15);
-        pthread_attr_init(&attr);
-        //pthread_attr_setstacksize(&attr, ss);
-        pthread_create(&threads[i], &attr, &piece_limit, &args[i]);
-        pthread_attr_destroy(&attr);
-	}
 	
 	/* 1. Allouer de l'espace pour threads et threads_data. */
+	if((threads = malloc(sizeof(pthread_t) * nb_thread)) == NULL) {
+		printf("limits threads malloc error\n");
+		goto err;	
+	}
+	
+	if((thread_data = malloc(sizeof(struct limit_data) * nb_thread)) == NULL) {
+		printf("limits thread_data malloc error\n");
+		goto err;	
+	}
 
-	/* 2. Lancement du calcul en parallèle avec dragon_limit_worker. */
-
+	/* 2. Lancement du calcul en parallèle avec dragon_limit_worker. */	
+	for (int i = 0; i < nb_thread; i++) {
+		thread_data[i].id = i;
+		thread_data[i].start = i * size / nb_thread;
+		thread_data[i].end = (i + 1) * size / nb_thread;
+		for (int j = 0; j < NB_TILES; j++)
+			thread_data[i].pieces[j] = masters[j];
+		if(pthread_create(&threads[i], NULL, dragon_limit_worker, &thread_data[i]) != 0) {
+			printf("limits pthread_create error\n");
+			goto err;	
+		}
+	}
+	
 	/* 3. Attendre la fin du traitement. */
-
+	void *res;
+	for (int i = 0; i < nb_thread; i++) {
+		int retVal = pthread_join(threads[i], &res);
+		if(retVal != 0){
+			printf("limits pthread_join error : " + retVal + '\n');
+			goto err;
+		}
+	}
+	
 	/* 4. Fusion des pièces.
 	 *
 	 * La fonction piece_merge est disponible afin d'accomplir ceci.
 	 * Notez bien que les pièces ayant la même orientation initiale
 	 * doivent être fusionnées ensemble.
 	 * */
+	 for (int i = 0; i < NB_TILES; i++) {
+		 for (int j = 1; j < nb_thread; j++) {
+			piece_merge(&thread_data[0].pieces[i],thread_data[j].pieces[i], tiles_orientation[i]);
+		}
+		masters[i] = thread_data[0].pieces[i];
+	}
 
 	/* La limite globale est calculée à partir des limites
 	 * de chaque dragon calculées à l'étape 4.
