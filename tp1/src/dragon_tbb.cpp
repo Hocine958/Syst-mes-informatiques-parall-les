@@ -22,18 +22,18 @@ extern "C" {
 using namespace std;
 using namespace tbb;
 
-std::atomic<int> counter;
+std::atomic<int> interval;
 
 pthread_mutex_t mutex_stdout;
 void printf_threadsafe(const char *format, ...)
 {
-	va_list ap;
+	va_list list;
 
-	va_start(ap, format);
+	va_start(list, format);
 	pthread_mutex_lock(&mutex_stdout);
-	vprintf(format, ap);
+	vprintf(format, list);
 	pthread_mutex_unlock(&mutex_stdout);
-	va_end(ap);
+	va_end(list);
 }
 
 class DragonLimits {
@@ -73,14 +73,16 @@ class DragonLimits {
 
 class DragonDraw {
 	public:
-		DragonDraw(const DragonDraw &dragon) 
+		DragonDraw(const DragonDraw &dragon, TidMap* tidMap) 
 		{
 			this->drawData = dragon.drawData;
+			this->tidMap = tidMap;
 		}
 		
-		DragonDraw(draw_data *drawData) 
+		DragonDraw(draw_data *drawData, TidMap* tidMap) 
 		{ 
 			this->drawData = drawData;
+			this->tidMap = tidMap;
 		}
 		
 		void operator()(const blocked_range<uint64_t> &range) const
@@ -89,7 +91,7 @@ class DragonDraw {
 
 			string msg = "(TBB)Thread no: %d, interval : (%d - %d), gettid() : %d\n";
 			const char *array = msg.c_str();
-			printf_threadsafe(array, counter++, range.begin(), range.end(), gettid());
+			printf_threadsafe(array, interval++, range.begin(), range.end(), gettid());
 
 			xy_t position;
 			xy_t orientation;
@@ -107,7 +109,7 @@ class DragonDraw {
 					int n = (position.y + (position.y + orientation.y)) >> 1;
 					int index = n * this->drawData->dragon_width + m;
 
-					this->drawData->dragon[index] = n * this->drawData->nb_thread / this->drawData->size;
+					this->drawData->dragon[index] = j * this->drawData->nb_thread / this->drawData->size;
 
 					position.x += orientation.x;
 					position.y += orientation.y;
@@ -225,7 +227,9 @@ int dragon_draw_tbb(char **canvas, struct rgb *image, int width, int height, uin
 	parallel_for(blocked_range<uint64_t>(0, dragon_surface), dragon_clear);
 
 	/* 3. Dessiner le dragon : DragonDraw */
-	DragonDraw dragon_draw(&data);
+	TidMap* tidMap = new TidMap(nb_thread);
+	interval = 0;
+	DragonDraw dragon_draw(&data, tidMap);
 	parallel_for(blocked_range<uint64_t>(0, data.size), dragon_draw);
 
 	/* 4. Effectuer le rendu final */
@@ -236,6 +240,8 @@ int dragon_draw_tbb(char **canvas, struct rgb *image, int width, int height, uin
 	
 	free_palette(palette);
 	FREE(data.tid);
+	tidMap->dump();
+	FREE(tidMap);
 	*canvas = dragon;
 	//*canvas = NULL; // TODO: Retourner le dragon calculé
 	return 0;
