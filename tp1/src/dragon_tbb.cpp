@@ -6,6 +6,9 @@
  */
 
 #include <iostream>
+#include <atomic>
+#include <stdarg.h>
+#include <string.h>
 
 extern "C" {
 #include "dragon.h"
@@ -19,105 +22,149 @@ extern "C" {
 using namespace std;
 using namespace tbb;
 
+std::atomic<int> counter;
+
+pthread_mutex_t mutex_stdout;
+void printf_threadsafe(const char *format, ...)
+{
+	va_list ap;
+
+	va_start(ap, format);
+	pthread_mutex_lock(&mutex_stdout);
+	vprintf(format, ap);
+	pthread_mutex_unlock(&mutex_stdout);
+	va_end(ap);
+}
+
 class DragonLimits {
 	public:
-	piece_t pieces[NB_TILES];
-	
-	DragonLimits()
-	{
-		for (size_t i = 0; i < NB_TILES; i++)
+		piece_t pieces[NB_TILES];
+		
+		DragonLimits()
 		{
-			piece_init(&pieces[i]);
-			pieces[i].orientation = tiles_orientation[i];
+			for (size_t i = 0; i < NB_TILES; i++)
+			{
+				piece_init(&pieces[i]);
+				pieces[i].orientation = tiles_orientation[i];
+			}
 		}
-	}
 
-	DragonLimits(DragonLimits &thread, split)
-	{
-		for (size_t i = 0; i < NB_TILES; i++)
+		DragonLimits(DragonLimits &dragon, split)
 		{
-			piece_init(&pieces[i]);
-			pieces[i].orientation = tiles_orientation[i];
+			for (size_t i = 0; i < NB_TILES; i++)
+			{
+				piece_init(&pieces[i]);
+				pieces[i].orientation = tiles_orientation[i];
+			}
 		}
-	}
 
-	void join(DragonLimits &thread)
-	{
-		for (size_t i = 0; i < NB_TILES; i++)
-			piece_merge(&pieces[i], thread.pieces[i], tiles_orientation[i]);
-	}
-	
-	void operator()(const blocked_range<uint64_t> &range)
-	{
-		for (size_t i = 0; i < NB_TILES; i++)
-			piece_limit(range.begin(), range.end(), &pieces[i]);
-	}
+		void join(DragonLimits &dragon)
+		{
+			for (size_t i = 0; i < NB_TILES; i++)
+				piece_merge(&pieces[i], dragon.pieces[i], tiles_orientation[i]);
+		}
+		
+		void operator()(const blocked_range<uint64_t> &range)
+		{
+			for (size_t i = 0; i < NB_TILES; i++)
+				piece_limit(range.begin(), range.end(), &pieces[i]);
+		}
 };
 
 class DragonDraw {
 	public:
-	DragonDraw(const DragonDraw &thread) 
-	{
-		this->drawData = thread.drawData;
-	}
-	
-	DragonDraw(draw_data *draw_data) 
-	{ 
-		this->drawData = draw_data;
-	}
+		DragonDraw(const DragonDraw &dragon) 
+		{
+			this->drawData = dragon.drawData;
+		}
+		
+		DragonDraw(draw_data *drawData) 
+		{ 
+			this->drawData = drawData;
+		}
+		
+		void operator()(const blocked_range<uint64_t> &range) const
+		{
+			this->drawData->id = tidMap->getIdFromTid(gettid());
 
-	void operator()(const blocked_range<uint64_t> &range) const
-	{
-		for (size_t i = 0; i < NB_TILES; i++)
-			dragon_draw_raw(i,range.begin(), range.end(), this->drawData->dragon, this->drawData->dragon_width, this->drawData->dragon_height,
-				this->drawData->limits, range.begin() * this->drawData->nb_thread / this->drawData->size);
-	}
+			string msg = "(TBB)Thread no: %d, interval : (%d - %d), gettid() : %d\n";
+			const char *array = msg.c_str();
+			printf_threadsafe(array, counter++, range.begin(), range.end(), gettid());
+
+			xy_t position;
+			xy_t orientation;
+			uint64_t j;
+			for (size_t i = 0; i < NB_TILES; i++)
+			{
+				position = compute_position(i, range.begin());
+				orientation = compute_orientation(i, range.begin());
+				position.x -= this->drawData->limits.minimums.x;
+				position.y -= this->drawData->limits.minimums.y;
+
+				for (j = range.begin() + 1; j <= range.end(); j++)
+				{
+					int m = (position.x + (position.x + orientation.x)) >> 1;
+					int n = (position.y + (position.y + orientation.y)) >> 1;
+					int index = n * this->drawData->dragon_width + m;
+
+					this->drawData->dragon[index] = n * this->drawData->nb_thread / this->drawData->size;
+
+					position.x += orientation.x;
+					position.y += orientation.y;
+					if (((j & -j) << 1) & j)
+						rotate_left(&orientation);
+					else
+						rotate_right(&orientation);
+				}
+			}
+		}
 
   private:
-	draw_data *drawData;
+		draw_data *drawData;
+		TidMap *tidMap;
 };
 
 class DragonRender {
 	public:
-	DragonRender(const DragonRender &thread) 
-	{
-		this->drawData = thread.drawData; 
-	}
-	
-	DragonRender(draw_data *draw_data) 
-	{
-		this->drawData = draw_data;
-	}
+		DragonRender(const DragonRender &dragon) 
+		{
+			this->drawData = dragon.drawData; 
+		}
+		
+		DragonRender(draw_data *drawData) 
+		{
+			this->drawData = drawData;
+		}
 
-	void operator()(const blocked_range<uint64_t> &range) const
-	{
-		scale_dragon(range.begin(), range.end(), this->drawData->image, this->drawData->image_width,this->drawData->image_height,
-			this->drawData->dragon, this->drawData->dragon_width, this->drawData->dragon_height,this->drawData->palette);
-	}
+		void operator()(const blocked_range<uint64_t> &range) const
+		{
+			scale_dragon(range.begin(), range.end(), this->drawData->image, this->drawData->image_width,this->drawData->image_height,
+				this->drawData->dragon, this->drawData->dragon_width, this->drawData->dragon_height,this->drawData->palette);
+		}
 
   private:
-	draw_data *drawData;
+		draw_data *drawData;
 };
 
 class DragonClear {
 	public:
-	DragonClear(const DragonClear &thread)
-	{
-		this->drawData = thread.drawData;
-	}
-	
-	DragonClear(draw_data *draw_data)
-	{
-		this->drawData = draw_data;
-	}
+		DragonClear(const DragonClear &dragon)
+		{
+			this->drawData = dragon.drawData;
+		}
+		
+		DragonClear(draw_data *drawData)
+		{
+			this->drawData = drawData;
+		}
 
-	void operator()(const blocked_range<uint64_t> &range) const
-	{
-		init_canvas(range.begin(), range.end(), this->drawData->dragon, -1);
-	}
+		void operator()(const blocked_range<uint64_t> &range) const
+		{
+			init_canvas(range.begin(), range.end(), this->drawData->dragon, -1);
+		}
 
   private:
-	draw_data *drawData;
+		draw_data *drawData;
 };
 
 int dragon_draw_tbb(char **canvas, struct rgb *image, int width, int height, uint64_t size, int nb_thread)
@@ -184,7 +231,9 @@ int dragon_draw_tbb(char **canvas, struct rgb *image, int width, int height, uin
 	/* 4. Effectuer le rendu final */
 	DragonRender dragon_render(&data);
 	parallel_for(blocked_range<uint64_t>(0, data.image_height), dragon_render);
-
+	
+	init.terminate();
+	
 	free_palette(palette);
 	FREE(data.tid);
 	*canvas = dragon;

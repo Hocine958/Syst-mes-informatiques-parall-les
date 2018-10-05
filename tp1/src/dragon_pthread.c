@@ -43,8 +43,6 @@ void* dragon_draw_worker(void *data)
 	
 	/* 1. Initialiser la surface */
 	int area = drawData->dragon_width * drawData->dragon_height;
-	/*uint64_t start = drawData->id * area / drawData->nb_thread;
-	uint64_t end = (drawData->id+1) * area / drawData->nb_thread;*/
 	
 	int step = area / drawData->nb_thread;
 	int start = drawData->id * step;
@@ -67,6 +65,8 @@ void* dragon_draw_worker(void *data)
 
 	start = drawData->id * drawData->size / drawData->nb_thread;
 	end = (drawData->id + 1) * drawData->size / drawData->nb_thread;
+	
+	printf_threadsafe("Thread no: %d, interval: (%d - %d), gettid(): %d \n", drawData->id, start, end, gettid());
 	
 	for(int i = 0; i < 4; i++){
 		dragon_draw_raw(i, start, end, drawData->dragon, drawData->dragon_width, drawData->dragon_height, drawData->limits, drawData->id);
