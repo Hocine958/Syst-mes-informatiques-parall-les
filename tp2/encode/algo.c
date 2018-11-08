@@ -25,11 +25,7 @@ struct cs {
 } __attribute__((aligned(64)));
 
 int encode_fast(struct chunk *chunk)
-{
-    /* TODO
-    chunk->checksum = 42;
-    return 0;*/
-    
+{    
     int i;
     int checksum = 0;
     char *data = chunk->data;
