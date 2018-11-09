@@ -50,7 +50,7 @@ void value_color(struct rgb *color, float value, int interval, float interval_in
 		*color = black;
 		return;
 	}
-	struct rgb c;
+	struct rgb c;./configure LDFLAGS="-L/usr/lib64/nvidia -L/opt/cuda-9.1/lib64" --with-include=/opt/cuda-9.1/include/
 	int x = (((int)value % interval) * 255) * interval_inv;
 	int i = value * interval_inv;
 	switch(i) {
@@ -86,7 +86,33 @@ void value_color(struct rgb *color, float value, int interval, float interval_in
 	*color = c;
 }
 
-__kernel void sinoscope_kernel()
+
+__kernel void sinoscope_kernel(__global unsigned char* buf, const int width, const int interval, const int taylor, const float interval_inv, const float time, const float phase0, const float phase1, const float dx, const float dy)
 {
-	// TODO
+	const int x = get_global_id(0);
+	const int y = get_global_id(1);
+    
+	//int index, tayl;
+	struct rgb c;
+	//float val, px, py;   
+	
+
+	float px = dx * y - 2 * M_PI;
+	float py = dy * x - 2 * M_PI;
+	float val = 0.0f;
+			
+	for (int tayl = 1; tayl <= taylor; tayl += 2) {
+		val += sin(px * tayl * phase1 + time) / tayl + cos(py * tayl * phase0) / tayl;
+	}
+		
+	val = (atan(1.0 * val) - atan(-1.0 * val)) / (M_PI);
+	val = (val + 1) * 100;
+	value_color(&c, val, interval, interval_inv);
+	int index = (y * 3) + (x * 3) * width;
+	
+	//#pragma OPENCL EXTENSION cl_khr_byte_addressable_store: enable
+	buf[index + 0] = c.r;
+	buf[index + 1] = c.g;
+	buf[index + 2] = c.b;
 }
+

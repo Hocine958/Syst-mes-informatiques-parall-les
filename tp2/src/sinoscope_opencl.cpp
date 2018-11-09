@@ -131,7 +131,12 @@ int create_buffer(int width, int height)
      * TODO: initialiser la memoire requise avec clCreateBuffer()
      */
     cl_int ret = 0;
-    goto error;
+    
+    size_t buffSize = width * height * 3 * sizeof(unsigned char);
+
+    output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, buffSize, NULL, &ret);
+	ERR_THROW(CL_SUCCESS, ret, "failed to create buffer");
+    
 done:
     return ret;
 error:
@@ -179,6 +184,9 @@ void opencl_shutdown()
     /*
      * TODO: liberer les ressources allouees
      */
+    if (prog)   clReleaseProgram(prog);
+    if (kernel) clReleaseKernel(kernel);
+	if (output) clReleaseMemObject(output);
 }
 
 int sinoscope_image_opencl(sinoscope_t *ptr)
@@ -205,9 +213,36 @@ int sinoscope_image_opencl(sinoscope_t *ptr)
 
     cl_int ret = 0;
     cl_event ev;
-
-    if (ptr == NULL)
+	
+	size_t work_dim[2] = {static_cast<size_t>(ptr->width), static_cast<size_t>(ptr->height)};
+	
+	if (ptr == NULL)
         goto error;
+      
+	ret = clEnqueueWriteBuffer(queue, output, CL_FALSE, 0, ptr->buf_size, ptr->buf, 0, NULL, &ev);
+	ERR_THROW(CL_SUCCESS, ret, "failed to copy buffer : clEnqueueWriteBuffer");
+
+    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), &output);
+    ret |= clSetKernelArg(kernel, 1, sizeof(int), &(ptr->width));
+    ret |= clSetKernelArg(kernel, 2, sizeof(int), &(ptr->interval));
+    ret |= clSetKernelArg(kernel, 3, sizeof(int), &(ptr->taylor));
+    ret |= clSetKernelArg(kernel, 4, sizeof(float), &(ptr->interval_inv));
+    ret |= clSetKernelArg(kernel, 5, sizeof(float), &(ptr->time));;
+    ret |= clSetKernelArg(kernel, 6, sizeof(float), &(ptr->phase0));
+    ret |= clSetKernelArg(kernel, 7, sizeof(float), &(ptr->phase1));
+    ret |= clSetKernelArg(kernel, 8, sizeof(float), &(ptr->dx));
+    ret |= clSetKernelArg(kernel, 9, sizeof(float), &(ptr->dy));
+
+    ERR_THROW(CL_SUCCESS, ret, "failed to pass args to kernel : clSetKernelArg");
+
+    ret = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, work_dim, NULL, 0, NULL, NULL);
+    ERR_THROW(CL_SUCCESS, ret, "failed to call kernel : clEnqueueNDRangeKernel");
+
+    ret = clFinish(queue);
+    ERR_THROW(CL_SUCCESS, ret, "wait fail : clFinish()");
+
+    ret = clEnqueueReadBuffer(queue, output, CL_FALSE, 0, ptr->buf_size, ptr->buf, 0, NULL, NULL);
+	ERR_THROW(CL_SUCCESS, ret, "failed to write results : clEnqueueReadBuffer");
 
 done:
     return ret;
