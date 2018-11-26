@@ -86,7 +86,7 @@ void value_color(struct rgb *color, float value, int interval, float interval_in
         *color = black;
         return;
     }
-    //struct rgb c;
+    struct rgb c;
     int x = (((int)value % interval) * 255) * interval_inv;
     int i = value * interval_inv;
     switch(i) {
