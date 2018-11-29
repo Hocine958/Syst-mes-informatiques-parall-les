@@ -196,11 +196,7 @@ void free_ctx(ctx_t *ctx) {
 }
 
 int init_ctx(ctx_t *ctx, opts_t *opts) {
-<<<<<<< HEAD
 	//TODO("lab3");
-=======
-	TODO("lab3");
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 	MPI_Comm_size(MPI_COMM_WORLD, &ctx->numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ctx->rank);
 
@@ -218,7 +214,6 @@ int init_ctx(ctx_t *ctx, opts_t *opts) {
 	ctx->isperiodic[1] = 1;
 	ctx->reorder = 0;
 	grid_t *new_grid = NULL;
-<<<<<<< HEAD
 	
 	int result, width, height, rtag;
 	 
@@ -230,16 +225,10 @@ int init_ctx(ctx_t *ctx, opts_t *opts) {
 
 	MPI_Cart_coords(ctx->comm2d, ctx->rank, DIM_2D, ctx->coords);
 	
-=======
-
-	/* TODO: Créer un "2D cartesian communicator" */
-
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 	/*
 	 * TODO: Le processus rank=0 charge l'image du disque
 	 * et transfert chaque section aux autres processus
 	 */
-<<<<<<< HEAD
 	if (ctx->rank == 0) {
 		
 		/* Charger l'image d'entrée */
@@ -314,57 +303,16 @@ int init_ctx(ctx_t *ctx, opts_t *opts) {
 	if (new_grid == NULL)
 		goto err;
 		
-=======
-
-	/* Charger l'image d'entrée */
-	image_t *image = load_png(opts->input);
-	if (image == NULL)
-		goto err;
-
-	/* Initialisation de la grid avec le canal rouge */
-	ctx->global_grid = grid_from_image(image, CHAN_RED);
-
-	/* La grid a été normalisée à 1, mutiplication par MAX_TEMP */
-	grid_multiply(ctx->global_grid, MAX_TEMP);
-
-	/* Décomposition 2D */
-	ctx->cart = make_cart2d(ctx->global_grid->width,
-			ctx->global_grid->height, opts->dimx, opts->dimy);
-	cart2d_grid_split(ctx->cart, ctx->global_grid);
-
-	/*
-	 * TODO: Envoyer les dimensions de la grid dimensions et les données
-	 * Comment traiter le cas de rank=0 ?
-	 */
-
-	/*
-	 * TODO: Recevoir les dimensions de la grid
-	 * et stocker dans new_grid
-	 */
-
-	/* Utilisation temporaire de global_grid */
-	new_grid = ctx->global_grid;
-
-	if (new_grid == NULL)
-		goto err;
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 	/* set padding required for Runge-Kutta */
 	ctx->curr_grid = grid_padding(new_grid, 1);
 	ctx->next_grid = grid_padding(new_grid, 1);
 	ctx->heat_grid = grid_padding(new_grid, 1);
-<<<<<<< HEAD
 	free_grid(new_grid);
 
 	/* TODO: Créer un type vector pour échanger les colonnes */
 	MPI_Type_vector(ctx->curr_grid->height, 1, ctx->curr_grid->pw, MPI_DOUBLE, &ctx->vector);
 	MPI_Type_commit(&ctx->vector);
 	
-=======
-	//free_grid(new_grid);
-
-	/* TODO: Créer un type vector pour échanger les colonnes */
-
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 	return 0;
 	err: return -1;
 }
@@ -384,7 +332,6 @@ void exchng2d(ctx_t *ctx) {
 	 * 4 échanges doivent etre effectués
 	 */
 
-<<<<<<< HEAD
 	//TODO("lab3");
 	 
 	grid_t *grid = ctx->curr_grid;
@@ -429,22 +376,6 @@ void exchng2d(ctx_t *ctx) {
 
 int gather_result(ctx_t *ctx, opts_t *opts) {
 	//TODO("lab3");
-=======
-	TODO("lab3");
-	/*
-	 grid_t *grid = ctx->next_grid;
-	 int width = grid->pw;
-	 int height = grid->ph;
-	 int *data = grid->data;
-	 MPI_Comm comm = ctx->comm2d;
-	 MPI_Request req[8];
-	 MPI_Status status[8];
-	 */
-}
-
-int gather_result(ctx_t *ctx, opts_t *opts) {
-	TODO("lab3");
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 
 	int ret = 0;
 	grid_t *local_grid = grid_padding(ctx->next_grid, 0);
@@ -455,7 +386,6 @@ int gather_result(ctx_t *ctx, opts_t *opts) {
 	 * TODO: Transférer les résultats de la simulation vers le rank=0.
 	 * Utiliser grid pour ceci.
 	 */
-<<<<<<< HEAD
 	if (ctx->rank == 0) {
 		int coords[DIM_2D];
 		MPI_Request request[ctx->numprocs];
@@ -482,13 +412,6 @@ int gather_result(ctx_t *ctx, opts_t *opts) {
 		if (result != MPI_SUCCESS)
 			goto err;
 	}
-=======
-
-	/* now we can merge all data blocks, reuse global_grid */
-	//cart2d_grid_merge(ctx->cart, ctx->global_grid);
-	/* temporairement copie de next_grid */
-	grid_copy(ctx->next_grid, ctx->global_grid);
->>>>>>> 95b29ae5fb3a2d34de774d31d6c5c48b3dc0d40e
 
 	done: free_grid(local_grid);
 	return ret;
